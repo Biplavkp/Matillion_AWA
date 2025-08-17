@@ -1,0 +1,344 @@
+type: "orchestration"
+version: "1.0"
+pipeline:
+  components:
+    Create Table Credit Card:
+      type: "create-table-v2"
+      transitions:
+        unconditional:
+        - "Grants Access"
+      skipped: false
+      parameters:
+        componentName: "Create Table Credit Card"
+        createMethod: "Create if not exists"
+        database: "DEMO_DATABASE"
+        schema: "DEMO_SCHEMA"
+        table: "CREDIT_CARD_CUSTOMERS_VINEET"
+        snowflakeTableType: "Permanent"
+        columns:
+        - - "CUST_ID"
+          - "VARCHAR"
+          - "20"
+          - ""
+          - ""
+          - "Yes"
+          - "Yes"
+          - ""
+          - ""
+        - - "CREDIT_CARD_NUMBER"
+          - "VARCHAR"
+          - "19"
+          - ""
+          - ""
+          - "No"
+          - "No"
+          - ""
+          - ""
+        - - "BALANCE"
+          - "NUMBER"
+          - "10"
+          - "2"
+          - ""
+          - "No"
+          - "No"
+          - ""
+          - ""
+        - - "PURCHASES"
+          - "NUMBER"
+          - "10"
+          - "2"
+          - ""
+          - "No"
+          - "No"
+          - ""
+          - ""
+        - - "INSTALLMENTS_PURCHASES"
+          - "NUMBER"
+          - "10"
+          - "2"
+          - ""
+          - "No"
+          - "No"
+          - ""
+          - ""
+        - - "CASH_ADVANCE"
+          - "NUMBER"
+          - "10"
+          - "2"
+          - ""
+          - "No"
+          - "No"
+          - ""
+          - ""
+        - - "CREDIT_LIMIT"
+          - "NUMBER"
+          - "10"
+          - "2"
+          - ""
+          - "No"
+          - "No"
+          - ""
+          - ""
+        - - "PAYMENTS"
+          - "NUMBER"
+          - "10"
+          - "2"
+          - ""
+          - "No"
+          - "No"
+          - ""
+          - ""
+        - - "MINIMUM_PAYMENTS"
+          - "NUMBER"
+          - "10"
+          - "2"
+          - ""
+          - "No"
+          - "No"
+          - ""
+          - ""
+        - - "TENURE"
+          - "NUMBER"
+          - "10"
+          - "2"
+          - ""
+          - "No"
+          - "No"
+          - ""
+          - ""
+        - - "DATE_OF_TXN"
+          - "DATE"
+          - ""
+          - ""
+          - ""
+          - "No"
+          - "No"
+          - ""
+          - ""
+        defaultDdlCollation: ""
+        primaryKeys:
+        - "CUST_ID"
+        clusteringKeys:
+        dataRetentionTimeInDays: ""
+        comment: "Table for Holding Credit Card Txns"
+    SQL Script MASKING POLICIES:
+      type: "sql-script"
+      transitions:
+        unconditional:
+        - "Alter Masking Policy CREDIT_CARD"
+      skipped: false
+      parameters:
+        componentName: "SQL Script MASKING POLICIES"
+        sqlScript: "CREATE MASKING POLICY IF NOT EXISTS MASK_CREDIT_CARDS AS (CREDIT_CARD_NUMBER\
+          \ STRING) \nRETURNS STRING -> \nCASE \n   WHEN CURRENT_ROLE() IN ('DEVELOPER','ACCOUNTADMIN')\
+          \ THEN CREDIT_CARD_NUMBER\n   WHEN CURRENT_ROLE() IN ('ANALYST') THEN REGEXP_REPLACE(CREDIT_CARD_NUMBER,\
+          \ '^.{7}', '*******')\n   WHEN CURRENT_ROLE() IN ('TESTER') THEN '**********'\n\
+          \   ELSE '***CAN NOT BE SEEN***'\nEND"
+    Alter Masking Policy CREDIT_CARD:
+      type: "unknown-orchestration"
+      transitions:
+        unconditional:
+        - "Python Script"
+      skipped: false
+      parameters:
+        "1": "Alter Masking Policy CREDIT_CARD"
+        "2": "DEMO_DATABASE"
+        "3": "DEMO_SCHEMA"
+        "4": "Table"
+        "5": "CREDIT_CARD_CUSTOMERS_VINEET"
+        "6":
+          "1":
+          - - "CREDIT_CARD_NUMBER"
+            - "MASK_CREDIT_CARDS"
+    Create File Format CSV:
+      type: "create-file-format"
+      transitions:
+        unconditional:
+        - "SQL Script MASKING POLICIES"
+      skipped: false
+      parameters:
+        componentName: "Create File Format CSV"
+        createReplace: "Create if not exists"
+        database: "DEMO_DATABASE"
+        schema: "DEMO_SCHEMA"
+        fileFormatName: "CSV_FILE_FORMAT"
+        fileType: "CSV"
+        compression: "AUTO"
+        recordDelimiter: ""
+        fieldDelimiter: ","
+        skipHeader: "1"
+        skipBlankLines: "True"
+        dateFormat: ""
+        timeFormat: ""
+        timestampFormat: ""
+        escape: ""
+        escapeUnenclosedField: ""
+        trimSpace2: "False"
+        fieldOptionallyEnclosed: ""
+        nullIf2:
+        errorOnColumnCountMismatch: "True"
+        emptyFieldAsNull: "True"
+        replaceInvalidCharacters: "True"
+        encodingType: ""
+    Start 0:
+      type: "start"
+      transitions:
+        unconditional:
+        - "Create Table Credit Card"
+      skipped: false
+      parameters:
+        componentName: "Start 0"
+    S3 Load Data:
+      type: "s3-load"
+      skipped: false
+      parameters:
+        componentName: "S3 Load Data"
+        stage: "[Custom]"
+        authentication: "Credentials"
+        s3ObjectPrefix: "s3://matillionclass/Data_Masking/"
+        pattern: "${jv_filename}"
+        encryption: "None"
+        warehouse: "DEMO_WAREHOUSE"
+        database: "DEMO_DATABASE"
+        schema: "DEMO_SCHEMA"
+        targetTable: "CREDIT_CARD_CUSTOMERS_VINEET"
+        loadColumns:
+        - "CUST_ID"
+        - "CREDIT_CARD_NUMBER"
+        - "BALANCE"
+        - "PURCHASES"
+        - "INSTALLMENTS_PURCHASES"
+        - "CASH_ADVANCE"
+        - "CREDIT_LIMIT"
+        - "PAYMENTS"
+        - "MINIMUM_PAYMENTS"
+        - "TENURE"
+        - "DATE_OF_TXN"
+        format: "CSV_FILE_FORMAT"
+        onError: "Abort Statement"
+        sizeLimitB: ""
+        purgeFiles: "False"
+        truncateColumns: "False"
+        forceLoad: "False"
+    File Iterator 0:
+      type: "file-iterator"
+      iterationTarget: "S3 Load Data"
+      skipped: false
+      parameters:
+        componentName: "File Iterator 0"
+        inputDataType: "S3"
+        inputDataUrl1: "s3://matillionclass/Data_Masking/"
+        inputDataUrl3: "Yes"
+        maxIterations: "25"
+        filterRegex: ".*"
+        concurrency: "Concurrent"
+        variables:
+        - - "jv_filename"
+          - "Filename"
+    Python Script:
+      type: "python-script"
+      transitions:
+        unconditional:
+        - "File Iterator 0"
+      skipped: false
+      parameters:
+        componentName: "Python Script"
+        script: "###\n# Variables are directly accessible: \n#   print (myvar)\n#\
+          \ Updating a variable:\n#   context.updateVariable('myvar', 'new-value')\n\
+          # Grid Variables are accessible via the context:\n#   print (context.getGridVariable('mygridvar'))\n\
+          # Updating a grid variable:\n#   context.updateGridVariable('mygridvar',\
+          \ [['list','of'],['lists','!']])\n# A database cursor can be accessed from\
+          \ the context (Jython only):\n#   cursor = context.cursor()\n#   cursor.execute('select\
+          \ count(*) from mytable')\n#   rowcount = cursor.fetchone()[0]\n\nimport\
+          \ boto3\n\ns3_client = boto3.client('s3')\nbucket = 'matillionclass'\nprefix\
+          \ = 'Data_Masking/'  \n\nlatest_file = None\nlatest_timestamp = None\npaginator\
+          \ = s3_client.get_paginator('list_objects_v2')\n\n# Iterate through pages\n\
+          for page in paginator.paginate(Bucket=bucket, Prefix=prefix):\n    if 'Contents'\
+          \ in page:\n        for obj in page['Contents']:\n            if latest_timestamp\
+          \ is None or obj['LastModified'] > latest_timestamp:\n                latest_timestamp\
+          \ = obj['LastModified']\n                latest_file = obj['Key']\n    \n\
+          \    # Print the latest file\nif latest_file:\n    print(f\"\\nLatest file:\
+          \ {latest_file}, Last Modified: {latest_timestamp}\")\n    context.updateVariable('LastLoadedFile',\
+          \ latest_file)\nelse:\n    print(\"No files found in the S3 bucket.\")\n"
+        interpreter: "Python 3"
+        timeout: "360"
+    Grants Access:
+      type: "sql-script"
+      transitions:
+        unconditional:
+        - "Create File Format CSV"
+      skipped: false
+      parameters:
+        componentName: "Grants Access"
+        sqlScript: |-
+          GRANT SELECT ON TABLE DEMO_DATABASE.DEMO_SCHEMA.CREDIT_CARD_CUSTOMERS_VINEET TO ROLE ACCOUNTADMIN;
+          GRANT SELECT ON TABLE DEMO_DATABASE.DEMO_SCHEMA.CREDIT_CARD_CUSTOMERS_VINEET TO ROLE DESIGNER;
+          GRANT SELECT ON TABLE DEMO_DATABASE.DEMO_SCHEMA.CREDIT_CARD_CUSTOMERS_VINEET TO ROLE TESTER;
+          GRANT SELECT ON TABLE DEMO_DATABASE.DEMO_SCHEMA.CREDIT_CARD_CUSTOMERS_VINEET TO ROLE ANALYST;
+  variables:
+    jv_filename:
+      metadata:
+        type: "TEXT"
+        description: ""
+        scope: "COPIED"
+        visibility: "PUBLIC"
+      defaultValue: "customer_data_1"
+    S3_FILE_LIST:
+      metadata:
+        type: "GRID"
+        description: ""
+        scope: "COPIED"
+        visibility: "PUBLIC"
+        columns:
+          FILENAME:
+            columnType: "TEXT"
+          LAST_MODIFIED:
+            columnType: "TEXT"
+      defaultValue: []
+design:
+  components:
+    Create Table Credit Card:
+      position:
+        x: -416
+        "y": -96
+      tempMetlId: 2230
+    SQL Script MASKING POLICIES:
+      position:
+        x: -48
+        "y": -96
+      tempMetlId: 2231
+    Alter Masking Policy CREDIT_CARD:
+      position:
+        x: 80
+        "y": -96
+      tempMetlId: 2232
+    Create File Format CSV:
+      position:
+        x: -176
+        "y": -96
+      tempMetlId: 2233
+    Start 0:
+      position:
+        x: -544
+        "y": -96
+      tempMetlId: 2234
+    S3 Load Data:
+      position:
+        x: 416
+        "y": -64
+      tempMetlId: 2235
+    File Iterator 0:
+      position:
+        x: 416
+        "y": -96
+      tempMetlId: 2236
+    Python Script:
+      position:
+        x: 256
+        "y": -96
+      tempMetlId: 2237
+    Grants Access:
+      position:
+        x: -288
+        "y": -96
+      tempMetlId: 2238
